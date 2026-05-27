@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { ShoppingBag, Check, ShieldAlert, Sparkles, Coins, Zap } from 'lucide-react';
-
 const SHOP_ITEMS = {
   chassis: [
     { id: 'chassis_sleek', name: 'Sleek Poly-mesh', desc: 'Disjointed floating aerodynamic glass segments.', price: 0, raw: 'sleek' },
