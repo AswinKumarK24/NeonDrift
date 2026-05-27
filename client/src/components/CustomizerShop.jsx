@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { ShoppingBag, Check, Key, ShieldAlert, Sparkles, Coins, Zap } from 'lucide-react';
+import { ShoppingBag, Check, ShieldAlert, Sparkles, Coins, Zap } from 'lucide-react';
 
 const SHOP_ITEMS = {
   chassis: [
@@ -19,6 +19,16 @@ const SHOP_ITEMS = {
     { id: 'trail_binary', name: 'Digital Matrix', desc: 'Stream of floating binary code elements.', price: 100, raw: 'binary' },
     { id: 'trail_sparks', name: 'Pixel Sparks', desc: 'Exploding particles of classic arcade sparks.', price: 150, raw: 'sparks' }
   ]
+};
+
+const getGlowColor = (colorName) => {
+  switch (colorName) {
+    case 'cyan': return 0x00ffff;
+    case 'magenta': return 0xff00ff;
+    case 'lime': return 0x00ff88;
+    case 'gold': return 0xffbb00;
+    default: return 0x00ffff;
+  }
 };
 
 export default function CustomizerShop({ token, userProfile, onProfileUpdate }) {
@@ -46,135 +56,8 @@ export default function CustomizerShop({ token, userProfile, onProfileUpdate }) 
     glow: 'cyan'
   });
 
-  // Sync preview configuration when user profile changes
-  useEffect(() => {
-    if (userProfile) {
-      setPreviewOptions({
-        chassis: userProfile.equipped_chassis || 'sleek',
-        glow: userProfile.equipped_glow || 'cyan',
-        trail: userProfile.equipped_trail || 'streak'
-      });
-    }
-  }, [userProfile]);
-
-  // Synchronize 3D preview options
-  useEffect(() => {
-    previewRef.current.chassis = previewOptions.chassis;
-    previewRef.current.glow = previewOptions.glow;
-    rebuildPreviewAvatar();
-  }, [previewOptions]);
-
-  // COLOR MAPPER
-  const getGlowColor = (colorName) => {
-    switch (colorName) {
-      case 'cyan': return 0x00ffff;
-      case 'magenta': return 0xff00ff;
-      case 'lime': return 0x00ff88;
-      case 'gold': return 0xffbb00;
-      default: return 0x00ffff;
-    }
-  };
-
-  // THREEJS PREVIEW CANVAS INITIALIZATION
-  useEffect(() => {
-    const width = 240;
-    const height = 280;
-
-    const scene = new THREE.Scene();
-    
-    // Sleek dark purple/black scene background
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 1.2, 4.2);
-    camera.lookAt(0, 1.1, 0);
-
-    const renderer = new THREE.WebGLRenderer({ canvas: previewCanvasRef.current, antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xff00ff, 0.5);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x00ffff, 1.5);
-    dirLight.position.set(2, 5, 2);
-    scene.add(dirLight);
-
-    const ptLight = new THREE.PointLight(0xff00ff, 2, 10);
-    ptLight.position.set(0, 1.5, 1);
-    scene.add(ptLight);
-
-    // Pedagogical Pedestal for the avatar
-    const pedestalGeom = new THREE.CylinderGeometry(0.8, 0.9, 0.15, 12);
-    const pedestalMat = new THREE.MeshStandardMaterial({
-      color: 0x110222,
-      roughness: 0.2,
-      metalness: 0.8,
-      emissive: 0x550055,
-      emissiveIntensity: 0.5
-    });
-    const pedestal = new THREE.Mesh(pedestalGeom, pedestalMat);
-    pedestal.position.set(0, -0.05, 0);
-    scene.add(pedestal);
-
-    // Glowing wireframe grid ring around the pedestal
-    const ringGeom = new THREE.RingGeometry(0.85, 0.9, 16);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, 0.08, 0);
-    scene.add(ring);
-
-    previewRef.current.scene = scene;
-    previewRef.current.camera = camera;
-    previewRef.current.renderer = renderer;
-
-    rebuildPreviewAvatar();
-
-    const clock = new THREE.Clock();
-    let animId;
-
-    const animatePreview = () => {
-      animId = requestAnimationFrame(animatePreview);
-      const delta = clock.getDelta();
-      const elapsedTime = clock.getElapsedTime();
-
-      // Spin the entire avatar group smoothly
-      if (previewRef.current.avatarGroup) {
-        previewRef.current.avatarGroup.rotation.y += delta * 0.9;
-        // Floating effect
-        previewRef.current.avatarGroup.position.y = 0.05 + Math.sin(elapsedTime * 2.0) * 0.08;
-      }
-
-      // Spin internal disjointed segments individually
-      previewRef.current.avatarParts.forEach((part, idx) => {
-        part.rotation.y += delta * (0.8 + idx * 0.1);
-        part.rotation.x += delta * (0.2 * idx);
-      });
-
-      // Slowly pulse pedestal ring glow
-      ringMat.opacity = 0.5 + Math.sin(elapsedTime * 3) * 0.4;
-
-      renderer.render(scene, camera);
-    };
-
-    animatePreview();
-
-    return () => {
-      cancelAnimationFrame(animId);
-      scene.traverse((obj) => {
-        if (!obj.isMesh) return;
-        obj.geometry.dispose();
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(m => m.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      });
-    };
-  }, []);
-
   // COMPOSE 3D AVATAR IN PREVIEW REAL-TIME
-  const rebuildPreviewAvatar = () => {
+  const rebuildPreviewAvatar = useCallback(() => {
     const ref = previewRef.current;
     if (!ref.scene) return;
 
@@ -300,7 +183,128 @@ export default function CustomizerShop({ token, userProfile, onProfileUpdate }) 
     avatarGroup.position.set(0, 0.05, 0);
     ref.scene.add(avatarGroup);
     ref.avatarGroup = avatarGroup;
-  };
+  }, []);
+
+  // Sync preview configuration when user profile changes
+  useEffect(() => {
+    if (userProfile) {
+      const timer = setTimeout(() => {
+        setPreviewOptions({
+          chassis: userProfile.equipped_chassis || 'sleek',
+          glow: userProfile.equipped_glow || 'cyan',
+          trail: userProfile.equipped_trail || 'streak'
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [userProfile]);
+
+  // Synchronize 3D preview options
+  useEffect(() => {
+    previewRef.current.chassis = previewOptions.chassis;
+    previewRef.current.glow = previewOptions.glow;
+    rebuildPreviewAvatar();
+  }, [previewOptions, rebuildPreviewAvatar]);
+
+  // THREEJS PREVIEW CANVAS INITIALIZATION
+  useEffect(() => {
+    const width = 240;
+    const height = 280;
+
+    const scene = new THREE.Scene();
+    
+    // Sleek dark purple/black scene background
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 1.2, 4.2);
+    camera.lookAt(0, 1.1, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas: previewCanvasRef.current, antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xff00ff, 0.5);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x00ffff, 1.5);
+    dirLight.position.set(2, 5, 2);
+    scene.add(dirLight);
+
+    const ptLight = new THREE.PointLight(0xff00ff, 2, 10);
+    ptLight.position.set(0, 1.5, 1);
+    scene.add(ptLight);
+
+    // Pedagogical Pedestal for the avatar
+    const pedestalGeom = new THREE.CylinderGeometry(0.8, 0.9, 0.15, 12);
+    const pedestalMat = new THREE.MeshStandardMaterial({
+      color: 0x110222,
+      roughness: 0.2,
+      metalness: 0.8,
+      emissive: 0x550055,
+      emissiveIntensity: 0.5
+    });
+    const pedestal = new THREE.Mesh(pedestalGeom, pedestalMat);
+    pedestal.position.set(0, -0.05, 0);
+    scene.add(pedestal);
+
+    // Glowing wireframe grid ring around the pedestal
+    const ringGeom = new THREE.RingGeometry(0.85, 0.9, 16);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 0.08, 0);
+    scene.add(ring);
+
+    previewRef.current.scene = scene;
+    previewRef.current.camera = camera;
+    previewRef.current.renderer = renderer;
+
+    rebuildPreviewAvatar();
+
+    const clock = new THREE.Clock();
+    let animId;
+
+    const animatePreview = () => {
+      animId = requestAnimationFrame(animatePreview);
+      const delta = clock.getDelta();
+      const elapsedTime = clock.getElapsedTime();
+
+      // Spin the entire avatar group smoothly
+      if (previewRef.current.avatarGroup) {
+        previewRef.current.avatarGroup.rotation.y += delta * 0.9;
+        // Floating effect
+        previewRef.current.avatarGroup.position.y = 0.05 + Math.sin(elapsedTime * 2.0) * 0.08;
+      }
+
+      // Spin internal disjointed segments individually
+      previewRef.current.avatarParts.forEach((part, idx) => {
+        part.rotation.y += delta * (0.8 + idx * 0.1);
+        part.rotation.x += delta * (0.2 * idx);
+      });
+
+      // Slowly pulse pedestal ring glow
+      ringMat.opacity = 0.5 + Math.sin(elapsedTime * 3) * 0.4;
+
+      renderer.render(scene, camera);
+    };
+
+    animatePreview();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      scene.traverse((obj) => {
+        if (!obj.isMesh) return;
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => m.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      });
+    };
+  }, [rebuildPreviewAvatar]);
+
+
 
   // BUY API HANDLER
   const handleBuyItem = async (item) => {
@@ -330,6 +334,7 @@ export default function CustomizerShop({ token, userProfile, onProfileUpdate }) 
       };
       onProfileUpdate(updatedProfile);
     } catch (err) {
+      console.error('Purchase failed:', err);
       setError('Connection failure during checkout.');
     } finally {
       setBuying(null);
@@ -370,6 +375,7 @@ export default function CustomizerShop({ token, userProfile, onProfileUpdate }) 
       
       onProfileUpdate(updatedProfile);
     } catch (err) {
+      console.error('Equipping failed:', err);
       setError('Connection failure while modifying active components.');
     } finally {
       setEquipping(null);

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { Input } from './components/input';
 import { Button } from './components/ui/button';
 import { 
   Check, Trash2, LogOut, Code2, Play, ShoppingBag, 
-  Coins, Trophy, Terminal, Sparkles, User, HelpCircle, 
-  ChevronRight, RefreshCw, AlertCircle 
+  Coins, Trophy, Terminal, Sparkles, User, 
+  ChevronRight, RefreshCw 
 } from 'lucide-react';
 import GameCanvas from './components/GameCanvas';
 import CustomizerShop from './components/CustomizerShop';
@@ -106,7 +106,7 @@ function LoginPage({ setToken }) {
         setIsLogin(true);
         setError('System node registered. Enter access codes.');
       }
-    } catch (err) {
+    } catch {
       setError('Access connection failed. Check server status.');
     } finally {
       setLoading(false);
@@ -192,10 +192,10 @@ function Dashboard({ token, setToken }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     setToken(null);
-  };
+  }, [setToken]);
 
   // 1. FETCH PROFILE ON MOUNT & UPDATE CALLBACKS
   const fetchProfile = async () => {
@@ -210,13 +210,34 @@ function Dashboard({ token, setToken }) {
         logout();
       }
     } catch (err) {
-      console.error('Failed to sync profile metrics.');
+      console.error('Failed to sync profile metrics.', err);
     }
   };
 
   useEffect(() => {
-    fetchProfile();
-  }, [token]);
+    if (token) {
+      let active = true;
+      const getProfile = async () => {
+        try {
+          const res = await fetch('/api/user/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok && active) {
+            const data = await res.json();
+            setUserProfile(data.user);
+          } else if (res.status === 401 && active) {
+            logout();
+          }
+        } catch (err) {
+          console.error('Failed to sync profile metrics.', err);
+        }
+      };
+      getProfile();
+      return () => {
+        active = false;
+      };
+    }
+  }, [token, logout]);
 
   // 2. RUN FINISH SYNC CALLBACK
   const handleGameSync = (updatedShards, updatedHighScore) => {
@@ -247,17 +268,20 @@ function Dashboard({ token, setToken }) {
         setTasks(data.tasks || []);
       }
     } catch (err) {
-      console.error('Tasks synchronizer offline.');
+      console.error('Tasks synchronizer offline.', err);
     } finally {
       setLoadingTasks(false);
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'tasks') {
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    if (tabId === 'tasks') {
       fetchTasks();
+    } else if (tabId === 'leaderboard') {
+      fetchLeaderboard();
     }
-  }, [activeTab]);
+  };
 
   const addTask = async (e) => {
     e.preventDefault();
@@ -335,17 +359,11 @@ function Dashboard({ token, setToken }) {
         setLeaderboard(data.leaderboard || []);
       }
     } catch (err) {
-      console.error('Leaderboard system offline.');
+      console.error('Leaderboard system offline.', err);
     } finally {
       setLoadingLeaderboard(false);
     }
   };
-
-  useEffect(() => {
-    if (activeTab === 'leaderboard') {
-      fetchLeaderboard();
-    }
-  }, [activeTab]);
 
   return (
     <div className="w-full max-w-5xl px-4 py-8">
@@ -419,7 +437,7 @@ function Dashboard({ token, setToken }) {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`px-5 py-3 rounded-xl font-mono text-xs uppercase tracking-widest transition-all flex items-center gap-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-cyan-500/10 to-pink-500/10 text-white border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'

@@ -83,8 +83,8 @@ header p {
 
 .task-input-section {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     padding: 1.5rem;
     border-radius: var(--radius-lg);
     box-shadow: var(--glass-shadow);
@@ -136,6 +136,7 @@ input::placeholder {
 
 .btn-primary {
     background: rgba(255, 255, 255, 0.04);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
@@ -176,6 +177,7 @@ input::placeholder {
 
 .filter-btn {
     background: rgba(0, 0, 0, 0.2);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     color: var(--text-secondary);
     border: 1px solid transparent;
@@ -208,8 +210,8 @@ input::placeholder {
 
 .task-card {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     border-radius: var(--radius-md);
     padding: 1.25rem;
     display: flex;

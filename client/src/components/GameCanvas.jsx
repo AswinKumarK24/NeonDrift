@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Shield, Sparkles, Volume2, VolumeX, Zap, AlertTriangle, Play, RotateCcw } from 'lucide-react';
 
@@ -29,6 +29,316 @@ const GLITCH_CSS = `
   animation: crt-glitch 0.2s infinite;
 }
 `;
+
+// ADVANCED PROCEDURAL SYNTHWAVE GENERATOR
+// Uses pure Web Audio API nodes. Absolutely robust, zero network, zero dependencies.
+class ProceduralSynthwave {
+  constructor(ctx, analyser) {
+    this.ctx = ctx;
+    this.analyser = analyser;
+    this.isPlaying = false;
+    this.tempo = 125; // BPM
+    this.stepTime = 60 / this.tempo / 4; // 16th notes
+    this.currentStep = 0;
+    this.schedulerId = null;
+    this.gainNode = null;
+    
+    // Setup master volume
+    this.gainNode = ctx.createGain();
+    this.gainNode.gain.value = 0.35; // Nice background level
+    this.gainNode.connect(analyser);
+  }
+
+  start() {
+    if (this.isPlaying) return;
+    this.isPlaying = true;
+    this.currentStep = 0;
+    this.nextStepTime = this.ctx.currentTime;
+    this.scheduler();
+  }
+
+  stop() {
+    this.isPlaying = false;
+    if (this.schedulerId) {
+      clearTimeout(this.schedulerId);
+      this.schedulerId = null;
+    }
+  }
+
+  setVolume(val) {
+    if (this.gainNode) {
+      this.gainNode.gain.setValueAtTime(val, this.ctx.currentTime);
+    }
+  }
+
+  scheduler() {
+    if (!this.isPlaying) return;
+    
+    while (this.nextStepTime < this.ctx.currentTime + 0.1) {
+      this.scheduleStep(this.currentStep, this.nextStepTime);
+      this.nextStepTime += this.stepTime;
+      this.currentStep = (this.currentStep + 1) % 16;
+    }
+    
+    this.schedulerId = setTimeout(() => this.scheduler(), 25);
+  }
+
+  scheduleStep(step, time) {
+    // 1. Synth Bassline (classic driving eighth notes)
+    // Synthwave Cyberpunk Bassline: Root, Root, Octave, Octave
+    const bassSequence = [55, 55, 110, 110, 65, 65, 130, 130, 73, 73, 146, 146, 82, 82, 164, 164]; // HZ
+    const bassHz = bassSequence[step];
+    
+    if (step % 2 === 0) {
+      this.triggerBass(bassHz, time, this.stepTime * 1.5);
+    }
+
+    // 2. Synthesized Drum Loop
+    // Beat 1: Kick, Beat 2: Snare, Beat 3: Kick, Beat 4: Snare
+    // Hi-Hats on every upbeat
+    if (step === 0 || step === 8 || step === 10) {
+      this.triggerKick(time);
+    }
+    
+    if (step === 4 || step === 12) {
+      this.triggerSnare(time);
+    }
+
+    if (step % 4 === 2) {
+      this.triggerHihat(time);
+    }
+
+    // 3. Synth Arpeggiator Lead
+    // High-pass dynamic scale arpeggio
+    const melodySequence = [
+      329.63, 392.00, 440.00, 523.25,
+      392.00, 440.00, 523.25, 587.33,
+      440.00, 523.25, 587.33, 659.25,
+      523.25, 587.33, 659.25, 783.99
+    ];
+    
+    // Let's play melody notes dynamically
+    if (step % 4 === 0 || (step % 2 === 1 && Math.random() > 0.4)) {
+      // Shift scale based on absolute game time to change progressions
+      const pitchMultiplier = 1 + (Math.floor(this.ctx.currentTime / 8) % 4) * 0.12;
+      const melodyHz = melodySequence[(step + Math.floor(this.ctx.currentTime / 4)) % 16] * pitchMultiplier;
+      this.triggerLead(melodyHz, time, this.stepTime * 0.8);
+    }
+  }
+
+  triggerBass(hz, time, duration) {
+    const osc = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(hz, time);
+    
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(hz * 0.5, time); // Sub-bass
+
+    filter.type = 'lowpass';
+    filter.Q.setValueAtTime(4, time);
+    filter.frequency.setValueAtTime(100, time);
+    filter.frequency.exponentialRampToValueAtTime(800, time + 0.05);
+    filter.frequency.exponentialRampToValueAtTime(150, time + duration);
+
+    gain.gain.setValueAtTime(0.35, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+
+    osc.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.gainNode);
+
+    osc.start(time);
+    osc.stop(time + duration);
+    osc2.start(time);
+    osc2.stop(time + duration);
+  }
+
+  triggerKick(time) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.frequency.setValueAtTime(120, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+
+    gain.gain.setValueAtTime(1.0, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
+
+    osc.connect(gain);
+    gain.connect(this.gainNode);
+
+    osc.start(time);
+    osc.stop(time + 0.15);
+  }
+
+  triggerSnare(time) {
+    // Create noise buffer
+    const bufferSize = this.ctx.sampleRate * 0.18;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1000;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.4, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+    // Add a snappy body oscillator
+    const snap = this.ctx.createOscillator();
+    snap.type = 'triangle';
+    snap.frequency.setValueAtTime(180, time);
+    snap.frequency.exponentialRampToValueAtTime(80, time + 0.06);
+
+    const snapGain = this.ctx.createGain();
+    snapGain.gain.setValueAtTime(0.4, time);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.gainNode);
+
+    snap.connect(snapGain);
+    snapGain.connect(this.gainNode);
+
+    noise.start(time);
+    noise.stop(time + 0.2);
+    snap.start(time);
+    snap.stop(time + 0.1);
+  }
+
+  triggerHihat(time) {
+    const bufferSize = this.ctx.sampleRate * 0.04;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 7000;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.2, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.gainNode);
+
+    noise.start(time);
+    noise.stop(time + 0.05);
+  }
+
+  triggerLead(hz, time, duration) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(hz, time);
+
+    filter.type = 'lowpass';
+    filter.Q.value = 1;
+    filter.frequency.setValueAtTime(1500, time);
+    filter.frequency.exponentialRampToValueAtTime(500, time + duration);
+
+    gain.gain.setValueAtTime(0.18, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.gainNode);
+
+    osc.start(time);
+    osc.stop(time + duration);
+  }
+
+  // Interactive retro feedback
+  triggerInteractionBeep(hz) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = hz;
+    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.18);
+  }
+
+  triggerCrashSound() {
+    // Low rumble hit + noise explosion
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(90, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(30, this.ctx.currentTime + 0.4);
+
+    gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.5);
+
+    // Noise burst
+    const bufferSize = this.ctx.sampleRate * 0.4;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 400;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+
+    noise.start();
+    noise.stop(this.ctx.currentTime + 0.5);
+  }
+
+  triggerCollectBeep() {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+    osc.frequency.setValueAtTime(900, this.ctx.currentTime + 0.06);
+    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.16);
+  }
+}
 
 export default function GameCanvas({ token, userProfile, onGameSync }) {
   const containerRef = useRef(null);
@@ -93,15 +403,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
     trail: 'streak'
   });
 
-  // Sync profile details into ref
-  useEffect(() => {
-    if (userProfile) {
-      gameRef.current.chassis = userProfile.equipped_chassis || 'sleek';
-      gameRef.current.glow = userProfile.equipped_glow || 'cyan';
-      gameRef.current.trail = userProfile.equipped_trail || 'streak';
-      setHighScore(userProfile.high_score || 0);
-    }
-  }, [userProfile]);
+
 
   // Color mapper for aesthetics
   const getGlowColor = (colorName) => {
@@ -124,38 +426,9 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
     }
   };
 
-  // Keyboard controls
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!gameRef.current.isPlaying) return;
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        moveLane(-1);
-      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        moveLane(1);
-      }
-    };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
-  // Swipe/Touch controls
-  const touchStartX = useRef(null);
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-  const handleTouchEnd = (e) => {
-    if (!touchStartX.current || !gameRef.current.isPlaying) return;
-    const diffX = e.changedTouches[0].clientX - touchStartX.current;
-    if (diffX > 50) {
-      moveLane(1);
-    } else if (diffX < -50) {
-      moveLane(-1);
-    }
-    touchStartX.current = null;
-  };
-
-  const moveLane = (dir) => {
+  function moveLane(dir) {
     const newLane = Math.max(0, Math.min(2, gameRef.current.currentLane + dir));
     if (newLane !== gameRef.current.currentLane) {
       gameRef.current.currentLane = newLane;
@@ -167,431 +440,11 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
     }
   };
 
-  // ADVANCED PROCEDURAL SYNTHWAVE GENERATOR
-  // Uses pure Web Audio API nodes. Absolutely robust, zero network, zero dependencies.
-  class ProceduralSynthwave {
-    constructor(ctx, analyser) {
-      this.ctx = ctx;
-      this.analyser = analyser;
-      this.isPlaying = false;
-      this.tempo = 125; // BPM
-      this.stepTime = 60 / this.tempo / 4; // 16th notes
-      this.currentStep = 0;
-      this.schedulerId = null;
-      this.gainNode = null;
-      
-      // Setup master volume
-      this.gainNode = ctx.createGain();
-      this.gainNode.gain.value = 0.35; // Nice background level
-      this.gainNode.connect(analyser);
-    }
 
-    start() {
-      if (this.isPlaying) return;
-      this.isPlaying = true;
-      this.currentStep = 0;
-      this.nextStepTime = this.ctx.currentTime;
-      this.scheduler();
-    }
 
-    stop() {
-      this.isPlaying = false;
-      if (this.schedulerId) {
-        clearTimeout(this.schedulerId);
-        this.schedulerId = null;
-      }
-    }
 
-    setVolume(val) {
-      if (this.gainNode) {
-        this.gainNode.gain.setValueAtTime(val, this.ctx.currentTime);
-      }
-    }
 
-    scheduler() {
-      if (!this.isPlaying) return;
-      
-      while (this.nextStepTime < this.ctx.currentTime + 0.1) {
-        this.scheduleStep(this.currentStep, this.nextStepTime);
-        this.nextStepTime += this.stepTime;
-        this.currentStep = (this.currentStep + 1) % 16;
-      }
-      
-      this.schedulerId = setTimeout(() => this.scheduler(), 25);
-    }
-
-    scheduleStep(step, time) {
-      // 1. Synth Bassline (classic driving eighth notes)
-      // Synthwave Cyberpunk Bassline: Root, Root, Octave, Octave
-      const bassSequence = [55, 55, 110, 110, 65, 65, 130, 130, 73, 73, 146, 146, 82, 82, 164, 164]; // HZ
-      const bassHz = bassSequence[step];
-      
-      if (step % 2 === 0) {
-        this.triggerBass(bassHz, time, this.stepTime * 1.5);
-      }
-
-      // 2. Synthesized Drum Loop
-      // Beat 1: Kick, Beat 2: Snare, Beat 3: Kick, Beat 4: Snare
-      // Hi-Hats on every upbeat
-      if (step === 0 || step === 8 || step === 10) {
-        this.triggerKick(time);
-      }
-      
-      if (step === 4 || step === 12) {
-        this.triggerSnare(time);
-      }
-
-      if (step % 4 === 2) {
-        this.triggerHihat(time);
-      }
-
-      // 3. Synth Arpeggiator Lead
-      // High-pass dynamic scale arpeggio
-      const melodySequence = [
-        329.63, 392.00, 440.00, 523.25,
-        392.00, 440.00, 523.25, 587.33,
-        440.00, 523.25, 587.33, 659.25,
-        523.25, 587.33, 659.25, 783.99
-      ];
-      
-      // Let's play melody notes dynamically
-      if (step % 4 === 0 || (step % 2 === 1 && Math.random() > 0.4)) {
-        // Shift scale based on absolute game time to change progressions
-        const pitchMultiplier = 1 + (Math.floor(this.ctx.currentTime / 8) % 4) * 0.12;
-        const melodyHz = melodySequence[(step + Math.floor(this.ctx.currentTime / 4)) % 16] * pitchMultiplier;
-        this.triggerLead(melodyHz, time, this.stepTime * 0.8);
-      }
-    }
-
-    triggerBass(hz, time, duration) {
-      const osc = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(hz, time);
-      
-      osc2.type = 'square';
-      osc2.frequency.setValueAtTime(hz * 0.5, time); // Sub-bass
-
-      filter.type = 'lowpass';
-      filter.Q.setValueAtTime(4, time);
-      filter.frequency.setValueAtTime(100, time);
-      filter.frequency.exponentialRampToValueAtTime(800, time + 0.05);
-      filter.frequency.exponentialRampToValueAtTime(150, time + duration);
-
-      gain.gain.setValueAtTime(0.35, time);
-      gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
-
-      osc.connect(filter);
-      osc2.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.gainNode);
-
-      osc.start(time);
-      osc.stop(time + duration);
-      osc2.start(time);
-      osc2.stop(time + duration);
-    }
-
-    triggerKick(time) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.frequency.setValueAtTime(120, time);
-      osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
-
-      gain.gain.setValueAtTime(1.0, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
-
-      osc.connect(gain);
-      gain.connect(this.gainNode);
-
-      osc.start(time);
-      osc.stop(time + 0.15);
-    }
-
-    triggerSnare(time) {
-      // Create noise buffer
-      const bufferSize = this.ctx.sampleRate * 0.18;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buffer;
-
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = 1000;
-
-      const noiseGain = this.ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.4, time);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
-
-      // Add a snappy body oscillator
-      const snap = this.ctx.createOscillator();
-      snap.type = 'triangle';
-      snap.frequency.setValueAtTime(180, time);
-      snap.frequency.exponentialRampToValueAtTime(80, time + 0.06);
-
-      const snapGain = this.ctx.createGain();
-      snapGain.gain.setValueAtTime(0.4, time);
-      snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
-
-      noise.connect(filter);
-      filter.connect(noiseGain);
-      noiseGain.connect(this.gainNode);
-
-      snap.connect(snapGain);
-      snapGain.connect(this.gainNode);
-
-      noise.start(time);
-      noise.stop(time + 0.2);
-      snap.start(time);
-      snap.stop(time + 0.1);
-    }
-
-    triggerHihat(time) {
-      const bufferSize = this.ctx.sampleRate * 0.04;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buffer;
-
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.value = 7000;
-
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.2, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
-
-      noise.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.gainNode);
-
-      noise.start(time);
-      noise.stop(time + 0.05);
-    }
-
-    triggerLead(hz, time, duration) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(hz, time);
-
-      filter.type = 'lowpass';
-      filter.Q.value = 1;
-      filter.frequency.setValueAtTime(1500, time);
-      filter.frequency.exponentialRampToValueAtTime(500, time + duration);
-
-      gain.gain.setValueAtTime(0.18, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.gainNode);
-
-      osc.start(time);
-      osc.stop(time + duration);
-    }
-
-    // Interactive retro feedback
-    triggerInteractionBeep(hz) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = hz;
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.18);
-    }
-
-    triggerCrashSound() {
-      // Low rumble hit + noise explosion
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(90, this.ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(30, this.ctx.currentTime + 0.4);
-
-      gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.5);
-
-      // Noise burst
-      const bufferSize = this.ctx.sampleRate * 0.4;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buffer;
-
-      const noiseFilter = this.ctx.createBiquadFilter();
-      noiseFilter.type = 'lowpass';
-      noiseFilter.frequency.value = 400;
-
-      const noiseGain = this.ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
-
-      noise.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(this.ctx.destination);
-
-      noise.start();
-      noise.stop(this.ctx.currentTime + 0.5);
-    }
-
-    triggerCollectBeep() {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600, this.ctx.currentTime);
-      osc.frequency.setValueAtTime(900, this.ctx.currentTime + 0.06);
-      gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.16);
-    }
-  }
-
-  // CORE GAME INIT & SETUP
-  useEffect(() => {
-    // 1. Initialize CSS for glitch
-    if (!document.getElementById('game-glitch-styles')) {
-      const style = document.createElement('style');
-      style.id = 'game-glitch-styles';
-      style.textContent = GLITCH_CSS;
-      document.head.appendChild(style);
-    }
-
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
-
-    // 2. Initialize ThreeJS Scene
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0c0114, 0.015);
-
-    // 3. Camera with dynamic aspect ratio setup (Cinemachine style)
-    const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
-    // Position camera behind and above the player avatar (which sits around z = -5)
-    camera.position.set(0, 4.5, 4);
-    camera.lookAt(0, 0, -25);
-
-    // 4. Renderer with optimal anti-aliasing
-    const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: false });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0c0114, 1.0);
-
-    // 5. Lighting
-    const ambientLight = new THREE.AmbientLight(0xff00ff, 0.4);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x00ffff, 1.2);
-    dirLight.position.set(0, 10, 5);
-    scene.add(dirLight);
-
-    const pointLight = new THREE.PointLight(0xff00ff, 2.0, 50);
-    pointLight.position.set(0, 2, -5);
-    scene.add(pointLight);
-
-    const clock = new THREE.Clock();
-
-    // Store objects in game ref
-    const game = gameRef.current;
-    game.scene = scene;
-    game.camera = camera;
-    game.renderer = renderer;
-    game.clock = clock;
-
-    // 6. Build the static Vaporwave Background
-    buildVaporwaveEnvironment();
-
-    // 7. Setup Web Audio FFT Analyser
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const audioContext = new AudioContextClass();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 128;
-    
-    // Connect analyser to speakers
-    analyser.connect(audioContext.destination);
-
-    game.audioContext = audioContext;
-    game.analyser = analyser;
-    game.proceduralSynth = new ProceduralSynthwave(audioContext, analyser);
-
-    // 8. Dynamic Splines (Lanes) Setup
-    createSplineLanes();
-
-    // 9. Create Avatar
-    createAvatar();
-
-    // 10. Start Animation Render Loop
-    let animationFrameId;
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      updateGameLoop();
-    };
-    animate();
-
-    // Window Resize Handler
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
-      
-      // Dynamic aspect adjustment (Cinemachine aspect ratio solution)
-      if (camera.aspect < 1.0) {
-        camera.fov = 80; // Wider field for portrait screens
-      } else {
-        camera.fov = 65; // Standard field for landscape screens
-      }
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
-    handleResize(); // Trigger immediately to set portrait/landscape FOV
-
-    // Cleanup on unmount
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-      if (game.proceduralSynth) {
-        game.proceduralSynth.stop();
-      }
-      if (game.audioContext) {
-        game.audioContext.close();
-      }
-      // Dispose meshes
-      disposeScene(scene);
-    };
-  }, []);
-
-  const disposeScene = (scene) => {
+  function disposeScene(scene) {
     scene.traverse((object) => {
       if (!object.isMesh) return;
       object.geometry.dispose();
@@ -604,7 +457,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   };
 
   // BUILD ENVIRONMENT: Cyber sun, grid floor, RAM tower buildings
-  const buildVaporwaveEnvironment = () => {
+  function buildVaporwaveEnvironment() {
     const scene = gameRef.current.scene;
 
     // 1. Cyber Giant Grid Sun
@@ -696,7 +549,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   };
 
   // DYNAMIC LANES (SPLINE THREADS)
-  const createSplineLanes = () => {
+  function createSplineLanes() {
     const scene = gameRef.current.scene;
     const game = gameRef.current;
 
@@ -742,7 +595,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   };
 
   // PRODUCED DYNAMIC AVATAR ("THE LINKER")
-  const createAvatar = () => {
+  function createAvatar() {
     const scene = gameRef.current.scene;
     const game = gameRef.current;
 
@@ -1023,7 +876,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   };
 
   // DETAILED GAME LOGIC UPDATE LOOP
-  const updateGameLoop = () => {
+  function updateGameLoop() {
     const game = gameRef.current;
     const delta = game.clock.getDelta();
     
@@ -1126,7 +979,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
     }
 
     // 5. Digital Stream Trail Particles
-    spawnStreamTrails(delta, fftBass);
+    spawnStreamTrails();
 
     // 6. Scrolling Grid Floor backward for motion
     if (game.gridFloor) {
@@ -1141,7 +994,6 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
 
     // 8. Update obstacle positions & check collisions
     const avatarZ = -5;
-    const avatarRadius = 0.75;
 
     for (let i = game.obstacles.length - 1; i >= 0; i--) {
       const obstacle = game.obstacles[i];
@@ -1234,7 +1086,7 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   };
 
   // EMIT SPARK TRAILS BASED ON SELECTED PREFERENCE
-  const spawnStreamTrails = (delta, fftBass) => {
+  const spawnStreamTrails = () => {
     const game = gameRef.current;
     const glowColor = getGlowColor(game.glow);
 
@@ -1314,7 +1166,6 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
   // COLLISION COLLECTION BURST EFFECTS
   const spawnCollectionExplosion = (x, y, lane) => {
     const game = gameRef.current;
-    const glowColor = getGlowColor(game.glow);
 
     for (let i = 0; i < 8; i++) {
       const geom = new THREE.BoxGeometry(0.18, 0.18, 0.18);
@@ -1357,6 +1208,169 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
       handleGameOver();
     }
   };
+
+  // Sync profile details into ref
+  useEffect(() => {
+    if (userProfile) {
+      gameRef.current.chassis = userProfile.equipped_chassis || 'sleek';
+      gameRef.current.glow = userProfile.equipped_glow || 'cyan';
+      gameRef.current.trail = userProfile.equipped_trail || 'streak';
+      
+      const newHighScore = userProfile.high_score || 0;
+      const timer = setTimeout(() => {
+        setHighScore(prev => prev !== newHighScore ? newHighScore : prev);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [userProfile]);
+
+  // Keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!gameRef.current.isPlaying) return;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        moveLane(-1);
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        moveLane(1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Swipe/Touch controls
+  const touchStartX = useRef(null);
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e) => {
+    if (!touchStartX.current || !gameRef.current.isPlaying) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX.current;
+    if (diffX > 50) {
+      moveLane(1);
+    } else if (diffX < -50) {
+      moveLane(-1);
+    }
+    touchStartX.current = null;
+  };
+
+  // CORE GAME INIT & SETUP
+  useEffect(() => {
+    // 1. Initialize CSS for glitch
+    if (!document.getElementById('game-glitch-styles')) {
+      const style = document.createElement('style');
+      style.id = 'game-glitch-styles';
+      style.textContent = GLITCH_CSS;
+      document.head.appendChild(style);
+    }
+
+    const width = containerRef.current.clientWidth;
+    const height = containerRef.current.clientHeight;
+
+    // 2. Initialize ThreeJS Scene
+    const scene = new THREE.Scene();
+    
+    // Sleek fog for synthwave style grid fading
+    scene.fog = new THREE.FogExp2(0x0c0114, 0.007);
+    
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    camera.position.set(0, 1.4, 0); // Position player camera inside the grid lane
+
+    const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Audio FFT initialization
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContextClass();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.connect(audioContext.destination);
+
+    const game = gameRef.current;
+    game.scene = scene;
+    game.camera = camera;
+    game.renderer = renderer;
+    game.audioContext = audioContext;
+    game.analyser = analyser;
+    game.proceduralSynth = new ProceduralSynthwave(audioContext, analyser);
+
+    // 1. Lights
+    const ambientLight = new THREE.AmbientLight(0xff00ff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x00ffff, 1.8);
+    dirLight.position.set(5, 15, 5);
+    scene.add(dirLight);
+
+    const pointLight = new THREE.PointLight(0xff00ff, 3, 20);
+    pointLight.position.set(0, 2, -10);
+    scene.add(pointLight);
+
+    // 2. Horizon Sun
+    const sunGeom = new THREE.CircleGeometry(30, 32);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xff007f, side: THREE.DoubleSide });
+    const sun = new THREE.Mesh(sunGeom, sunMat);
+    sun.position.set(0, 8, -200);
+    scene.add(sun);
+    game.sun = sun;
+
+    // 3. Grid Floor
+    const gridHelper = new THREE.GridHelper(300, 80, 0x00ffff, 0xff00ff);
+    gridHelper.position.set(0, 0, -100);
+    scene.add(gridHelper);
+    game.gridFloor = gridHelper;
+
+    // 4. Build Skyscraper towers
+    buildVaporwaveEnvironment();
+
+    // 5. Dynamic Splines (Lanes) Setup
+    createSplineLanes();
+
+    // 6. Create Avatar
+    createAvatar();
+
+    // 7. Start Animation Render Loop
+    let animationFrameId;
+    const animate = () => {
+      animationFrameId = requestAnimationFrame(animate);
+      updateGameLoop();
+    };
+    animate();
+
+    const handleResize = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      if (w < 600) {
+        camera.fov = 75; // Wider view for vertical mobile screens
+      } else {
+        camera.fov = 65; // Standard field for landscape screens
+      }
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Trigger immediately to set portrait/landscape FOV
+
+    // Cleanup on unmount
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', handleResize);
+      if (game.proceduralSynth) {
+        game.proceduralSynth.stop();
+      }
+      if (game.audioContext) {
+        game.audioContext.close();
+      }
+      // Dispose meshes
+      disposeScene(scene);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleSound = () => {
     const nextState = !musicEnabled;
@@ -1452,15 +1466,15 @@ export default function GameCanvas({ token, userProfile, onGameSync }) {
             <div className="space-y-4 mb-8 bg-white/5 border border-white/10 p-4 rounded-xl text-left text-xs font-mono text-gray-400">
               <div className="flex justify-between border-b border-white/5 pb-2">
                 <span>CHASSIS TYPE:</span>
-                <span className="text-cyan-400 uppercase font-bold">{gameRef.current.chassis}</span>
+                <span className="text-cyan-400 uppercase font-bold">{userProfile?.equipped_chassis || 'sleek'}</span>
               </div>
               <div className="flex justify-between border-b border-white/5 pb-2">
                 <span>CORE GLOW ENERGY:</span>
-                <span style={{ color: getGlowColorHex(gameRef.current.glow) }} className="uppercase font-bold">{gameRef.current.glow}</span>
+                <span style={{ color: getGlowColorHex(userProfile?.equipped_glow || 'cyan') }} className="uppercase font-bold">{userProfile?.equipped_glow || 'cyan'}</span>
               </div>
               <div className="flex justify-between pb-1">
                 <span>MATRIX STREAM TRAIL:</span>
-                <span className="text-pink-400 uppercase font-bold">{gameRef.current.trail}</span>
+                <span className="text-pink-400 uppercase font-bold">{userProfile?.equipped_trail || 'streak'}</span>
               </div>
             </div>
 
