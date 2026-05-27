@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEON DRIFT | 3D WebGL Infinite Runner</title>
+  <meta name="description" content="Immerse yourself in Neon Drift, a stunning 3D browser infinite runner game. Drift past obstacles, scale game phases, and rock synthwave soundtracks.">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- WebGL Render Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Overlay UI Layer -->
+  <div class="ui-layer">
+
+    <!-- STATIC TOP HUD ELEMENTS (Accessible on landing/game stages) -->
+    <!-- High Score counter loaded from localStorage -->
+    <div class="high-score-widget">
+      <span>HIGH RECORD:</span>
+      <span id="high-score-val" class="high-score-val">000000</span>
+    </div>
+
+    <!-- Mute & Info Buttons -->
+    <div class="utility-bar interactive">
+      <button id="sound-toggle-btn" class="icon-btn" title="Toggle Synth Audio" aria-label="Toggle Sound">
+        <!-- Sound On Icon (Default) -->
+        <svg id="sound-on-icon" viewBox="0 0 24 24">
+          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+        </svg>
+        <!-- Sound Off Icon (Hidden initially) -->
+        <svg id="sound-off-icon" viewBox="0 0 24 24" style="display: none;">
+          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ==========================================================================
+         LANDING PAGE
+         ========================================================================== -->
+    <div id="landing-page" class="interactive">
+      
+      <!-- Logo Title -->
+      <div class="logo-container">
+        <div class="logo-subtitle">SYSTEM INITIALIZED</div>
+        <h1 class="logo-title">NEON DRIFT</h1>
+      </div>
+
+      <!-- Avatar Selection Carousel -->
+      <div class="carousel-container">
+        <h2 class="carousel-title">SELECT DRIFT ENGINE</h2>
+        <div class="carousel-wrapper">
+          <button id="prev-avatar-btn" class="carousel-arrow" aria-label="Previous ship">&larr;</button>
+          
+          <div id="carousel-cards" class="carousel-cards">
+            
+            <!-- Ship 1 Card: Cyan Delta-Wing -->
+            <div class="avatar-card glass-panel active" data-index="0" style="--card-color: var(--neon-cyan); --card-glow: rgba(0,255,255,0.35);">
+              <div class="avatar-card-header">
+                <span class="avatar-class">MODEL // 01</span>
+                <span class="avatar-name">CYAN SHADOW</span>
+              </div>
+              <div class="avatar-stats">
+                <div class="stat-row">
+                  <span>VELOCITY</span>
+                  <span>90%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 90%;"></div></div>
+                <div class="stat-row">
+                  <span>STEER RATE</span>
+                  <span>80%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 80%;"></div></div>
+                <div class="stat-row">
+                  <span>INTEGRITY</span>
+                  <span>40%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 40%;"></div></div>
+              </div>
+            </div>
+
+            <!-- Ship 2 Card: Magenta Chrono -->
+            <div class="avatar-card glass-panel next" data-index="1" style="--card-color: var(--neon-magenta); --card-glow: rgba(255,0,255,0.35);">
+              <div class="avatar-card-header">
+                <span class="avatar-class">MODEL // 02</span>
+                <span class="avatar-name">MAGENTA PULSE</span>
+              </div>
+              <div class="avatar-stats">
+                <div class="stat-row">
+                  <span>VELOCITY</span>
+                  <span>70%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 70%;"></div></div>
+                <div class="stat-row">
+                  <span>STEER RATE</span>
+                  <span>95%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 95%;"></div></div>
+                <div class="stat-row">
+                  <span>INTEGRITY</span>
+                  <span>60%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 60%;"></div></div>
+              </div>
+            </div>
+
+            <!-- Ship 3 Card: Green Aegis -->
+            <div class="avatar-card glass-panel" data-index="2" style="--card-color: var(--neon-green); --card-glow: rgba(0,255,0,0.35);">
+              <div class="avatar-card-header">
+                <span class="avatar-class">MODEL // 03</span>
+                <span class="avatar-name">TOXIC APEX</span>
+              </div>
+              <div class="avatar-stats">
+                <div class="stat-row">
+                  <span>VELOCITY</span>
+                  <span>50%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 50%;"></div></div>
+                <div class="stat-row">
+                  <span>STEER RATE</span>
+                  <span>60%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 60%;"></div></div>
+                <div class="stat-row">
+                  <span>INTEGRITY</span>
+                  <span>100%</span>
+                </div>
+                <div class="stat-bar-container"><div class="stat-bar" style="width: 100%;"></div></div>
+              </div>
+            </div>
+
+          </div>
+          
+          <button id="next-avatar-btn" class="carousel-arrow" aria-label="Next ship">&rarr;</button>
+        </div>
+      </div>
+
+      <!-- Start Engine Button & Instructions -->
+      <div class="footer-container">
+        <button id="start-game-btn" class="start-btn">ENGAGE DRIFT</button>
+        <div class="control-tips">
+          <span><span class="key-cap">A</span> / <span class="key-cap">&larr;</span> SHIFT LEFT</span>
+          <span><span class="key-cap">D</span> / <span class="key-cap">&rarr;</span> SHIFT RIGHT</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         IN-GAME HUD (FLOATING)
+         ========================================================================== -->
+    <div id="game-hud">
+      
+      <!-- Top HUD Data Row -->
+      <div class="hud-top">
+        <div class="hud-group">
+          <div class="hud-panel glass-panel">
+            <div class="hud-label">DISTANCE</div>
+            <div class="hud-value"><span id="hud-distance">0000</span><span style="font-size: 0.75rem; margin-left: 2px;">M</span></div>
+          </div>
+        </div>
+
+        <div class="hud-stage glass-panel">
+          <div class="stage-title" id="hud-stage-banner">PHASE 1 // COOL BLUE</div>
+        </div>
+
+        <div class="hud-group" style="align-items: flex-end;">
+          <div class="hud-panel glass-panel" style="text-align: right;">
+            <div class="hud-label">CORE SCORE</div>
+            <div class="hud-value hud-accent" id="hud-score">000000</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transparent Touch Overlay for mobile/tablets -->
+      <div class="mobile-tap-zones">
+        <div id="tap-zone-left" class="tap-zone-left" title="Tap left to steer left"></div>
+        <div id="tap-zone-right" class="tap-zone-right" title="Tap right to steer right"></div>
+      </div>
+
+      <!-- Bottom HUD Row -->
+      <div class="hud-bottom">
+        <div class="speedometer-container">
+          <div class="speed-bar-track">
+            <div id="speed-bar-fill" class="speed-bar-fill"></div>
+          </div>
+          <div class="speed-text">VELOCITY MULTIPLIER: <span id="hud-multiplier" class="hud-accent">1.0x</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         GAME OVER MODAL Overlay
+         ========================================================================== -->
+    <div id="game-over-modal" class="interactive">
+      <div class="game-over-box glass-panel">
+        <h2 class="over-title">SYSTEM FAILURE</h2>
+        
+        <div class="over-stats">
+          <div class="over-stat-row">
+            <div class="over-stat-lbl">DISTANCE RUN</div>
+            <div class="over-stat-val" id="over-distance">0000m</div>
+          </div>
+          <div class="over-stat-row">
+            <div class="over-stat-lbl">SCORE ACHIEVED</div>
+            <div class="over-stat-val hud-accent" id="over-score">000000 <span id="over-record-tag" class="new-record-tag" style="display: none;">RECORD</span></div>
+          </div>
+          <div class="over-stat-row">
+            <div class="over-stat-lbl">MAX SECTOR REACHED</div>
+            <div class="over-stat-val" id="over-phase" style="color: #fff; font-size: 1.1rem;">PHASE 1</div>
+          </div>
+        </div>
+
+        <button id="restart-game-btn" class="restart-btn">REBOOT ENGINE</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Entry Script Modular Imports -->
+  <script type="module" src="./app.js"></script>
+
+</body>
+</html>
