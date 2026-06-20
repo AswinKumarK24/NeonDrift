@@ -54,6 +54,14 @@ const db = new sqlite3.Database(path.join(__dirname, 'database.sqlite'), (err) =
                 addColumn('unlocked_items', 'TEXT', `'["chassis_sleek","glow_cyan","trail_streak"]'`);
             }
         });
+
+        db.run(`CREATE TABLE IF NOT EXISTS high_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            score INTEGER NOT NULL,
+            distance INTEGER DEFAULT 0,
+            avatar TEXT DEFAULT 'GUEST',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     }
 });
 
@@ -284,6 +292,29 @@ app.post('/api/user/game/sync', authMiddleware, (req, res) => {
                 isNewHighScore
             });
         });
+    });
+});
+
+app.post('/api/highscore', (req, res) => {
+    const { score, distance, avatar } = req.body;
+    if (score === undefined) {
+        return res.status(400).json({ error: 'Score is required' });
+    }
+
+    db.run(
+        'INSERT INTO high_scores (score, distance, avatar) VALUES (?, ?, ?)',
+        [score, distance || 0, avatar || 'GUEST'],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.status(201).json({ success: true, id: this.lastID });
+        }
+    );
+});
+
+app.get('/api/highscore/leaderboard', (req, res) => {
+    db.all('SELECT id, score, distance, avatar, created_at FROM high_scores ORDER BY score DESC LIMIT 10', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ leaderboard: rows });
     });
 });
 

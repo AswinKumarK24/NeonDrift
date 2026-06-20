@@ -134,6 +134,24 @@ export class GameController {
     });
   }
 
+  async saveHighScoreToServer(score, distance, avatar) {
+    try {
+      await fetch('/api/highscore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          score,
+          distance,
+          avatar
+        })
+      });
+    } catch (err) {
+      console.warn('Unable to save high score to server:', err);
+    }
+  }
+
   // Synthesize UI Select sound
   playSfxSelect() {
     if (this.muted) return;
@@ -711,6 +729,12 @@ export class GameController {
       this.updateHighScoreDisplay();
       isNewRecord = true;
     }
+
+    this.saveHighScoreToServer(
+      Math.floor(this.score),
+      Math.floor(this.distance),
+      this.avatarStats[this.selectedAvatarIndex]?.name || 'GUEST'
+    );
 
     // Load values into game over elements
     document.getElementById('over-distance').textContent = `${Math.floor(this.distance)}m`;
